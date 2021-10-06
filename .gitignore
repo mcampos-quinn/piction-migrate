@@ -1,0 +1,4 @@
+*.csv
+*.sqlite
+*.json
+!sample_importer_config.json
