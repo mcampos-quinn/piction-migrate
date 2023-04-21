@@ -5,6 +5,7 @@ import sys
 def parse_categories(categories):
     parsed = re.match("([^,]+),([\d]+),?([^,]*),?(.*|$)",categories)
     if parsed:
+        print(parsed)
         try:
             year = parsed.group(2)
             # print(len(year))

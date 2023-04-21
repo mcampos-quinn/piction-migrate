@@ -16,7 +16,7 @@ def parse_metadata_row(row):
     umoid = row[0]
     return umoid
 
-def create_db(file_csv):
+def create_db(drive_path):
     create_table_sql = """create table if not exists files (\
         id integer primary key, \
         path not null, \
@@ -29,17 +29,32 @@ def create_db(file_csv):
     cursor.execute(create_table_sql)
     conn.commit()
 
-    with open(file_csv,'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            print(row)
-            path,umoid = parse_file_row(row[0])
-            if path and umoid:
-                cursor.execute(insert_sql,(path,umoid))
+    for root, dirs, files in os.walk(drive_path):
+        for file in files:
+                umoid = None
+                path = os.path.join(root,file)
+                try:
+                    umoid = re.match(r".+\/u(\d+)",root).group(1)
+                except:
+                    pass
+
+                if umoid and path:
+                    print(path)
+                    cursor.execute(insert_sql,(path,umoid))
+
+    # with open(file_csv,'r') as f:
+    #     reader = csv.reader(f)
+    #     for row in reader:
+    #         print(row)
+    #         path,umoid = parse_file_row(row[0])
+    #         if path and umoid:
+    #             cursor.execute(insert_sql,(path,umoid))
     conn.commit()
 
 def marry_files(metadata_csv,conn,cursor):
     out_rows = []
+    # this sql expression gets rid of dupe derivs
+    # select path from files where path not like '%_o2.jpg' and path not LIKE '%_o3.jpg' and path not like '%_o4.jpg'
     select_umoid_sql = "select path from files where umoid=?;"
     with open(metadata_csv,'r') as f:
         h_reader = csv.DictReader(f)
@@ -75,12 +90,12 @@ def main():
 
     if mode == 'new':
         try:
-            file_csv = sys.argv[2]
-            if not os.path.isfile(file_csv):
+            drive_path = sys.argv[2]
+            if not os.path.isdir(drive_path):
                 sys.exit()
         except:
             sys.exit()
-        create_db(file_csv)
+        create_db(drive_path)
     elif mode == "marry":
         metadata_csv = sys.argv[2]
         db_path = "files.sqlite"

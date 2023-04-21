@@ -50,6 +50,7 @@ def make_RS_API_call(completePOST):
 		return httpStatus,None
 
 def resourcespace_API_call(
+	resource_type,
 	quoted_metadata_JSON,
 	quoted_path,
 	rs_base_url,
@@ -59,17 +60,14 @@ def resourcespace_API_call(
 	'''
 	make a call to the RS create_resource() function
 	'''
-	query = (
-		"user={}"
+	query = (f"""
+		"user={user}"
 		"&function=create_resource"
-		"&resource_type=1"
+		"&resource_type={resource_type}"
 		"&archive=0"
-		"&url={}"
-		"&metadata={}".format(
-			user,
-			quoted_path,
-			quoted_metadata_JSON
-			)
+		"&url={quoted_path}"
+		"&metadata={quoted_metadata_JSON}"
+		"""
 		)
 	# print(query)
 	complete_POST = format_RS_POST(rs_base_url,query,api_key)
@@ -103,10 +101,13 @@ def post_rows(rows,config):
 	api_key = config["api_key"]
 
 	for row in rows:
-		quoted_path = urllib.parse.quote(row['FILEPATH'], safe='')
-		del row['FILEPATH']
+		quoted_path = urllib.parse.quote(row["FILEPATH"], safe="")
+		resource_type = row["RESOURCE_TYPE"]
+		del row["FILEPATH"]
+		del row["RESOURCE_TYPE"]
 		quoted_metadata_JSON = prep_resourcespace_JSON(row)
 		response = resourcespace_API_call(
+			resource_type,
 			quoted_metadata_JSON,
 			quoted_path,
 			rs_base_url,
@@ -127,11 +128,13 @@ def parse_row(row,mapping):
 
 def parse_input_csv(input_csv,config,category):
 	mapping = config['mappings'][category]
+	resource_type = config['mappings'][category]["RESOURCE_TYPE"]
 	rows = []
 	with open(input_csv,'r') as f:
 		reader = csv.DictReader(f)
 		for row in reader:
 			row_dict = parse_row(row,mapping)
+			row_dict["RESOURCE_TYPE"] = resource_type
 			# print(row_dict)
 			rows.append(row_dict)
 
