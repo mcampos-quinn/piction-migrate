@@ -11,6 +11,8 @@ import urllib.parse
 # nonstandard libraries
 import requests
 
+import config
+
 def format_RS_POST(rs_base_url,query,api_key):
 	'''
 	Take in the base query,
@@ -144,8 +146,8 @@ def main():
 	# category should be one of the mappings in `importer_config.json`: art, film, events, etc
 	category = sys.argv[1]
 	input_csv = sys.argv[2]
-	with open('importer_config.json','r') as f:
-		config = json.load(f)
+	# with open('importer_config.json','r') as f:
+	# 	config = json.load(f)
 
 	rows = parse_input_csv(input_csv,config,category)
 	post_rows(rows,config)

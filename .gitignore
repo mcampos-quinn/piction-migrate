@@ -1,4 +1,6 @@
 *.csv
 *.sqlite
 *.json
-!sample_importer_config.json
+config.py
+!sample_config.py
+/*

@@ -1,3 +1,9 @@
+'''
+this little piece of insanity was supposed to catch data entered in folder names
+in piction but not in the metadata. it just grabs YEAR and TITLE from the
+categories (i.e. folder names from piction) and adds them to the md if it had
+been blank
+'''
 import csv
 import re
 import sys

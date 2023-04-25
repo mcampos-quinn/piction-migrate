@@ -1,28 +1,23 @@
 import csv
 import os
+import pandas as pd
 import re
 import sqlite3
+import string
 import sys
 
-def parse_file_row(row):
-    try:
-        umoid = re.match("(\.\/[g|h]_drive.*u)([\d]+)(.*)",row).group(2)
-        path = row[1:]
-    except AttributeError:
-        umoid = path = None
-    return path,umoid
-
-def parse_metadata_row(row):
-    umoid = row[0]
-    return umoid
+import config
 
 def create_db(drive_path):
-    create_table_sql = """create table if not exists files (\
-        id integer primary key, \
-        path not null, \
-        umoid not null)"""
-    insert_sql = """insert into files (path, umoid) values (?,?)
-    """
+    create_table_sql = """CREATE TABLE IF NOT EXISTS files (\
+        id INTEGER PRIMARY KEY, \
+        path NOT NULL, \
+        umoid NOT NULL, \
+        resource_type TEXT, \
+        migrated_to_rs BOOLEAN, \
+        ingest_problem BOOLEAN
+        )"""
+    insert_sql = "INSERT INTO files (path, umoid) VALUES (?,?)"
     db_path = "files.sqlite"
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -41,49 +36,65 @@ def create_db(drive_path):
                 if umoid and path:
                     print(path)
                     cursor.execute(insert_sql,(path,umoid))
-
-    # with open(file_csv,'r') as f:
-    #     reader = csv.reader(f)
-    #     for row in reader:
-    #         print(row)
-    #         path,umoid = parse_file_row(row[0])
-    #         if path and umoid:
-    #             cursor.execute(insert_sql,(path,umoid))
     conn.commit()
 
-def marry_files(metadata_csv,conn,cursor):
-    out_rows = []
-    # this sql expression gets rid of dupe derivs
-    # select path from files where path not like '%_o2.jpg' and path not LIKE '%_o3.jpg' and path not like '%_o4.jpg'
-    select_umoid_sql = "select path from files where umoid=?;"
-    with open(metadata_csv,'r') as f:
-        h_reader = csv.DictReader(f)
-        headers = h_reader.fieldnames
-        headers.insert(0,'FILEPATH')
-        out_rows.append(headers)
+def intake_metadata(metadata_csv,resource_type,conn,cursor):
+    # this sql expression gets rid of piction-creatd derivs
+    # delete from files where path like '%_o2.jpg' or path LIKE '%_o3.jpg' or path like '%_o4.jpg'
+    db_columns = [x[1] for x in cursor.execute("PRAGMA table_info('files');").fetchall()]
+    add_column_sql = "ALTER TABLE files ADD COLUMN {} TEXT;"
+    select_umoid_sql = "SELECT id FROM files WHERE files.umoid=?"
+    update_columns_sql = """
+        UPDATE files
+        SET {}
+        WHERE id=?;
+        """
 
-        reader = csv.reader(f)
-        for row in reader:
-            umoid = parse_metadata_row(row)
-            print(umoid)
-            path = cursor.execute(select_umoid_sql,(umoid,)).fetchone()
-            if path:
-                row.insert(0,path[0])
-                out_rows.append(row)
-            else:
-                row.insert(0,path)
-                out_rows.append("NO MATCH")
-    with open('out.csv','w') as f:
-        writer = csv.writer(f)
-        for row in out_rows:
-            writer.writerow(row)
+    # read the metadata csv and put it in the db
+    with open(metadata_csv,'r') as f:
+        df = pd.read_csv(f)
+    if not "UMO ID" in df.columns:
+        print("Please name the column w/ the  Piction UMO ID 'UMO ID' and try again.")
+        sys.exit()
+    df.columns = df.columns.str.replace(
+        r"["+string.punctuation+","+string.whitespace+"]",
+        '_',
+        regex=True)
+
+    for column in df.columns:
+        if column not in db_columns:
+            try:
+                cursor.execute(add_column_sql.format(column))
+                conn.commit()
+            except:
+                print(cursor.execute(add_column_sql,(column,)).fetchall())
+    for row in df.itertuples():
+        item_umo = str(df.loc[row.Index,"UMO_ID"])
+        item_id = cursor.execute(select_umoid_sql,(item_umo,)).fetchone()[0]
+        values = [("resource_type",resource_type)]
+        # skip the first entry which is the Index
+        for field in row._fields[1:]:
+            value = df.loc[row.Index,field]
+            if not pd.isnull(value):
+                values.append((field,value))
+
+        # you can't use parameters to insert column names :/
+        # so this just updates the column names and values as a formatted str
+        values = ", ".join([f"{x}='{y}'" for (x,y) in values])
+        update_columns_sql = update_columns_sql.format(values)
+
+        cursor.execute(update_columns_sql,(item_id,))
+
+    conn.commit()
 
 def main():
     '''
     mode:
-        new = make a new database from the input file listing csv
-        marry = marry the input metadata csv (exported from piction) to the relevant file paths
-                on the piction file export drive & output a new csv
+        new = make a new database reflecting the files on the piction drive; drag
+                and drop the root directory of the drive into the command
+        intake = read the input metadata csv (exported from piction) and
+                add metadata for each row into the database; make columns as
+                needed based on csv column headers
     '''
     mode = sys.argv[1]
     print(mode)
@@ -96,12 +107,14 @@ def main():
         except:
             sys.exit()
         create_db(drive_path)
-    elif mode == "marry":
+    elif mode == "intake":
         metadata_csv = sys.argv[2]
+        category = sys.argv[3]
         db_path = "files.sqlite"
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        marry_files(metadata_csv,conn,cursor)
+        resource_type = config.instance_config['mappings'][category]["RESOURCE_TYPE"]
+        intake_metadata(metadata_csv,resource_type,conn,cursor)
     else:
         print("what did you do")
         sys.exit()
