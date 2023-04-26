@@ -41,6 +41,7 @@ def create_db(drive_path):
 def intake_metadata(metadata_csv,resource_type,conn,cursor):
     # this sql expression gets rid of piction-creatd derivs
     # delete from files where path like '%_o2.jpg' or path LIKE '%_o3.jpg' or path like '%_o4.jpg'
+    files_not_found = []
     db_columns = [x[1] for x in cursor.execute("PRAGMA table_info('files');").fetchall()]
     add_column_sql = "ALTER TABLE files ADD COLUMN {} TEXT;"
     select_umoid_sql = "SELECT id FROM files WHERE files.umoid=?"
@@ -70,7 +71,12 @@ def intake_metadata(metadata_csv,resource_type,conn,cursor):
                 print(cursor.execute(add_column_sql,(column,)).fetchall())
     for row in df.itertuples():
         item_umo = str(df.loc[row.Index,"UMO_ID"])
-        item_id = cursor.execute(select_umoid_sql,(item_umo,)).fetchone()[0]
+        print(item_umo)
+        try:
+            item_id = cursor.execute(select_umoid_sql,(item_umo,)).fetchone()[0]
+        except:
+            files_not_found.append(item_umo)
+            continue
         values = [("resource_type",resource_type)]
         # skip the first entry which is the Index
         for field in row._fields[1:]:
@@ -87,6 +93,10 @@ def intake_metadata(metadata_csv,resource_type,conn,cursor):
 
     conn.commit()
 
+    with open('orphan_files.txt','a') as f:
+        f.write("The files with these Piction UMO IDs weren't found on the drive listing:\n")
+        for item in files_not_found:
+            f.write(item+"\n")
 def main():
     '''
     mode:
