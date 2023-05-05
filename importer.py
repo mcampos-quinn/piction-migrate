@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
 import urllib.parse
 # nonstandard libraries
@@ -128,6 +127,7 @@ def parse_row(row,mapping):
 				pass
 	return row_dict
 
+
 def parse_input_csv(input_csv,config,category):
 	mapping = config['mappings'][category]
 	resource_type = config['mappings'][category]["RESOURCE_TYPE"]
@@ -144,13 +144,14 @@ def parse_input_csv(input_csv,config,category):
 
 def main():
 	# category should be one of the mappings in `importer_config.json`: art, film, events, etc
-	category = sys.argv[1]
-	input_csv = sys.argv[2]
+	limit = sys.argv[1]
+	# input_csv = sys.argv[2]
 	# with open('importer_config.json','r') as f:
 	# 	config = json.load(f)
 
-	rows = parse_input_csv(input_csv,config,category)
-	post_rows(rows,config)
+	# rows = parse_input_csv(input_csv,config,category)
+	# post_rows(rows,config)
+	run_migrator(limit)
 
 if __name__ == "__main__":
 	main()
