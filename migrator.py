@@ -113,13 +113,13 @@ def run_cleaner(limit=0):
     conn,cursor = db_connect()
     # only select rows that were processed during the csv parsing process
     select_rows_sql = "SELECT * FROM FILES "\
-        "WHERE ingest_problem LIKE '%debug%' "\
-        "AND migrated_to_rs = 'False' "\
+        "WHERE (migrated_to_rs IS NULL "\
+        "AND ingest_problem IS NULL) "\
         f"LIMIT {limit}"
     rows = cursor.execute(select_rows_sql).fetchall()
     headers = list(map(lambda attr : attr[0], cursor.description))
     results = [{header:row[i] for i, header in enumerate(headers)} for row in rows]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = []
         for item in results:
             futures.append(executor.submit(migrate, item))
@@ -132,7 +132,7 @@ def run_cleaner(limit=0):
 def run_migrator(limit=0):
     conn,cursor = db_connect()
     # only select rows that were processed during the csv parsing process
-    select_rows_sql = "SELECT * FROM FILES "\
+    select_rows_sql = "SELECT * FROM files "\
         "WHERE category IS NOT NULL "\
         "AND migrated_to_rs IS NULL "\
         "AND ingest_problem IS NULL "\
@@ -171,7 +171,11 @@ def migrate(item):#,conn,cursor):
         if field not in system_fields
         and value not in ["",None,"None"]
         }
-    item_metadata = map_fields(item_metadata,item_system_data['category'])
+    try:
+        item_metadata = map_fields(item_metadata,item_system_data['category'])
+    except:
+        # if the metadata was blank just set the resource_type to General
+        item_system_data['resource_type'] = '6'
     mapped_escaped_metadata = rs_utils.prep_resourcespace_JSON(item_metadata)
     path = item_system_data['path']
     path = path.replace('/Volumes',config.instance_config['FILE_SERVER_URL'])
@@ -220,7 +224,7 @@ def map_fields(item_metadata,category):
     return metadata
 
 def db_connect():
-    db_path = "files.sqlite"
+    db_path = "/Users/michael/PROJECTS/piction-migrate/files.sqlite"
     conn = sqlite3.connect(db_path)#, check_same_thread=False)
     cursor = conn.cursor()
 
@@ -269,6 +273,11 @@ def main():
         run_cleaner(limit)
     else:
         quit()
+
+p.loc[p['FILE NAME'] == r.loc[r['Original filename']]]['FILE NAME']
+
+ r.loc[r['File checksum'] == 'd4d769bf562c57c905100ed447646646']['Title']
+
 
 if __name__=="__main__":
     main()
